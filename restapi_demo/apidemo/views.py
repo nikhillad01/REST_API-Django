@@ -1,9 +1,11 @@
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
+from django.template.backends import django
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import stock,Registration
+from .models import stock,Registration  # imports the models
+from .models import RestRegistration
 from .serializers import stockSerializer
 from .forms import Registrationform
 from django.contrib.auth import get_user_model
@@ -13,18 +15,25 @@ from .serializers import TokenAuthentication
 from .serializers import registrationSerializer
 from rest_framework.generics import CreateAPIView
 
+from jinja2 import Environment,PackageLoader, select_autoescape
 
+env = Environment(
+    loader=PackageLoader('apidemo', 'templates'),
+    autoescape=select_autoescape(['html', 'xml'])
+)
 
-
-def index(request):
+def index(request):         # this is homepage.
     return render(request, 'index.html', {})
 
-# /stocks
-class StockList(APIView):
+def dash(request):      # /dash/
+    return render(request,'dashboard.html',{})
+
+
+class StockList(APIView):       # /stocks/
 
 
     def get(self,request):
-        stocks=stock.objects.all()
+        stocks=stock.objects.all()      # using fields from stock model.
         serializer = stockSerializer(stocks)
 
         return Response(serializer.data)
@@ -33,28 +42,21 @@ class StockList(APIView):
     def post(self):
         pass
 
+
 def register(request):              # Normal Registration without Rest Framework.
+
     form = Registrationform(request.POST or None)
     if form.is_valid():
         form.save()
     context ={
-        'form':form
+        'form': form
     }
-      # if request.method == 'POST':
-      #      add_to_database = Registration()
-      #      add_to_database.uname = request.POST.get('uname')
-      #      add_to_database.pwd = request.POST.get('pass')
-      #      add_to_database.cpass = request.POST.get('cpass')
-      #      add_to_database.save()
 
-           #return HttpResponse('<h1> Successfully registered</h1>')
-    return render(request, 'registration.html',context)
-           # else:
-        #     return render(request, 'posts/create.html')
+    return render(request, 'registration.html', context)
 
 
-from .models import RestRegistration
-User= get_user_model()
+
+User= get_user_model()          # will retrieve the USER model class.
 
 class UserCreateAPI(CreateAPIView):             # Registration using Rest framework Using User Model.
 
@@ -64,50 +66,21 @@ class UserCreateAPI(CreateAPIView):             # Registration using Rest framew
                                                 # (adds data to RestRegistration Model.)
     #registrationSerializer
 
-
-
 class LoginView(APIView):
+
     serializer_class = TokenAuthentication
     queryset = User.objects.all()
-    http_method_names = ['post','get']      # to use POST method by default it was using GET.
+    http_method_names = ['post', 'get']      # to use POST method by default it was using GET.
 
 
-
-
-    # def post(self,request):
-    #     serializer=loginSerializer(data=request.data)
-    #     serializer.is_valid(raise_exception=True)  #if validation is wrong or any exception occurs then it will return to user
-    #     user = serializer.user
-    #     if user==True:
-    #         payload = {
-    #             'username': user.username,
-    #             'password': user.password,
-    #         }
-    #
-    #         jwt_token = {'token': jwt.encode(payload, "SECRET_KEY")}
-    #         return HttpResponse(
-    #             json.dumps(jwt_token),
-    #             status=200,
-    #             content_type="application/json"
-    #         )
-    #     else:
-    #         return Response(
-    #             json.dumps({'Error': "Invalid credentials"}),
-    #             status=400,
-    #             content_type="application/json"
-    #         )
-
-
-    # status 400= Bad Request:indicates that the server could not understand the
-    # request due to invalid syntax.
     def post(self, request):
         if not request.data:    # if nothing is provided in username and password.
             return Response({'Error': "Please provide username/password"}, status="400")
-
-        username = request.data['username']
-        password = request.data['password']
+        # used Rest Requests request.data insted of request.POST , can be compatible with POST,PUT etc
+        username = request.data['username']     # gets the username
+        password = request.data['password']     # gets the password
         try:
-            user = User.objects.get(username=username, password=password)
+            user = User.objects.get(username=username, password=password)   # Checks for Valid username and password.
         except User.DoesNotExist:
             return Response({'Error': "Invalid username or password"}, status="400")
         if user:
@@ -118,7 +91,9 @@ class LoginView(APIView):
                 jwt_token = {'token': jwt.encode(payload, "secret_key", algorithm='HS256')}
                 # generates the token using payload information.
                 # print(jwt_token)
-
+                template = env.get_template('dashboard.html')   # using Jinja2 to get the dashboard template
+                #template.render(username=username)             # renders to template with variable username.
+                #return render_template()
                 return HttpResponse(
                     #jwt_token,
                     #user.username,
@@ -134,3 +109,34 @@ class LoginView(APIView):
                 status=400,
                 content_type="application/json"
             )
+from django import forms
+# class register_with_confirm_password(forms.ModelForm,CreateAPIView):
+#
+#     http_methods=['post','get']
+#     password=forms.CharField(widget=forms.PasswordInput())
+#     confirm_password=forms.CharField(widget=forms.PasswordInput())
+#     class Meta:
+#         model=User
+#         fields=('username','email','password')
+#
+#     def clean(self):
+#         cleaned_data = super(register_with_confirm_password, self).clean()
+#         password = cleaned_data.get("password")
+#         confirm_password = cleaned_data.get("confirm_password")
+#
+#         if password != confirm_password:
+#             raise forms.ValidationError(
+#                 "password and confirm_password does not match"
+#             )
+
+from django.contrib.auth import logout
+
+class LogoutView(APIView):
+    authentication_classes = (TokenAuthentication,)
+    def post(self,request):
+        #logout()
+        #TokenAuthentication.authenticate()
+        return Response(status=204)
+
+
+
